@@ -1,0 +1,903 @@
+AccountUtility.apxc:-
+
+public class AddPrimaryContact implements Queueable {
+   private Contact con;
+    private string state;
+
+    public AddPrimaryContact(Contact con,string state){
+        this.con = con;
+        this.state = state;
+    }
+    public void execute(QueueableContext context){
+        List<Account>accounts = [select id,Name,(select FirstName,LastName,Id from contacts) from Account where BillingState =  :state Limit 200];
+        List<Contact>primaryContacts = new list<Contact>();
+        for(Account acc:accounts){
+            Contact c =con.clone();
+            c.AccountId = acc.Id;
+            primaryContacts.add(c);
+        }
+        if(primaryContacts.size()>0){
+            insert primaryContacts;
+        }
+    }
+}
+
+
+PropertyUtility.apxc:-
+
+public class AddPrimaryContact implements Queueable {
+   private Contact con;
+    private string state;
+
+    public AddPrimaryContact(Contact con,string state){
+        this.con = con;
+        this.state = state;
+    }
+    public void execute(QueueableContext context){
+        List<Account>accounts = [select id,Name,(select FirstName,LastName,Id from contacts) from Account where BillingState =  :state Limit 200];
+        List<Contact>primaryContacts = new list<Contact>();
+        for(Account acc:accounts){
+            Contact c =con.clone();
+            c.AccountId = acc.Id;
+            primaryContacts.add(c);
+        }
+        if(primaryContacts.size()>0){
+            insert primaryContacts;
+        }
+    }
+}
+
+
+LeadProcessorTest.apxc:-
+
+@isTest
+public class LeadProcessorTest{
+    @isTest
+    public static void testit(){
+        List<lead>L_list = new list<lead>();
+        for(Integer i=0;i<200;i++){
+            Lead L = new lead();
+            L.LastName = 'name'+i;
+            L.Company ='Company';
+            L.Status = 'Random Status';
+            L_list.add(L);
+        }
+        insert L_list;
+        Test.startTest();
+        Leadprocessor lp= new LeadProcessor();
+        id batchId = Database.executeBatch(lp);
+        Test.stopTest();
+    }
+}
+
+Leadprocessor.apxc:-
+
+global class LeadProcessor implements Database.Batchable<sObject>{
+    global integer count=0;
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator('SELECT ID,LeadSource FROM Lead');
+    }
+    global void execute(Database.BatchableContext bc, List<Lead> L_list){
+       list<Lead> L_list_new = new List<Lead>();
+        for (Lead L:L_list) {
+            L.leadsource = 'Dreamforce';
+            L_list_new.add(L);
+            count+=1;
+        }
+        update L_list_new;
+    }
+    public void finish(Database.BatchableContext bc){
+        system.debug('count = '+ count);
+    }
+}
+
+AddPrimaryContact.apxc
+
+public class AddPrimaryContact implements Queueable {
+   private Contact con;
+    private string state;
+
+    public AddPrimaryContact(Contact con,string state){
+        this.con = con;
+        this.state = state;
+    }
+    public void execute(QueueableContext context){
+        List<Account>accounts = [select id,Name,(select FirstName,LastName,Id from contacts) from Account where BillingState =  :state Limit 200];
+        List<Contact>primaryContacts = new list<Contact>();
+        for(Account acc:accounts){
+            Contact c =con.clone();
+            c.AccountId = acc.Id;
+            primaryContacts.add(c);
+        }
+        if(primaryContacts.size()>0){
+            insert primaryContacts;
+        }
+    }
+}
+
+
+AddPrimaryContactTest.apxc
+
+@isTest
+public class AddPrimaryContactTest {
+    static testmethod void testQueueable(){
+        List<Account>testAccounts = new list <Account>();
+        for(integer i=0;i<50;i++){
+            testAccounts.add(new Account(Name='Account'+i,BillingState='CA'));
+        }
+        for(integer j=0;j<50;j++){
+            testAccounts.add(new Account(Name='Account'+j,BillingState='NY'));
+        }
+        insert testAccounts;
+
+        Contact testContact = new Contact(FirstName='John',LastName='Doe');
+        insert testContact;
+        AddPrimaryContact addit = new addPrimaryContact(testContact,'CA');
+        Test.startTest();
+        system.enqueueJob(addit);
+        Test.stopTest();
+        system.assertEquals(50,[Select count() from Contact where accountId in (Select Id from Account where BillingState='CA')]);
+    }
+}
+
+
+
+DailyLeadProcessor.apxc:-
+
+@isTest
+public class AddPrimaryContactTest {
+    static testmethod void testQueueable(){
+        List<Account>testAccounts = new list <Account>();
+        for(integer i=0;i<50;i++){
+            testAccounts.add(new Account(Name='Account'+i,BillingState='CA'));
+        }
+        for(integer j=0;j<50;j++){
+            testAccounts.add(new Account(Name='Account'+j,BillingState='NY'));
+        }
+        insert testAccounts;
+
+        Contact testContact = new Contact(FirstName='John',LastName='Doe');
+        insert testContact;
+        AddPrimaryContact addit = new addPrimaryContact(testContact,'CA');
+        Test.startTest();
+        system.enqueueJob(addit);
+        Test.stopTest();
+        system.assertEquals(50,[Select count() from Contact where accountId in (Select Id from Account where BillingState='CA')]);
+    }
+}
+
+DailyLeadProcessorTest.apxc:-
+
+@isTest
+private class DailyLeadProcessorTest{
+    //Seconds Minutes Hours Day_of_month Month Day_of_week optional_year
+    public static String CRON_EXP = '0 0 0 2 6 ? 2022';
+    static testmethod void testScheduledJob(){
+        List<Lead> leads = new List<Lead>();
+        for(Integer i = 0; i < 200; i++){
+            Lead lead = new Lead(LastName = 'Test ' + i, LeadSource = '', Company = 'Test Company ' + i, Status = 'Open - Not Contacted');
+            leads.add(lead);
+        }
+        insert leads;
+        Test.startTest();
+        // Schedule the test job
+        String jobId = System.schedule('Update LeadSource to DreamForce', CRON_EXP, new DailyLeadProcessor());
+        // Stopping the test will run the job synchronously
+        Test.stopTest();
+    }
+}
+
+
+
+BASIC TRIGGER CODES:::::::::::::::::::
+
+ClosedOpportunityTrigger.apxt:-
+
+trigger ClosedOpportunityTrigger on Opportunity (after insert,after update) {
+List<Task> tasklist = new List<Task>();
+    for(Opportunity opp:Trigger.New){
+        if(opp.Stagename=='Closed Won'){
+          tasklist.add(New Task(subject='Follow Up Test Task',WhatId=opp.Id));
+        }      
+    }
+    if(tasklist.size()>=0){
+        insert tasklist;
+    }
+}
+
+RejectDuplicateFavorite.apxt:-
+
+trigger RejectDuplicateFavorite on Favorite__c (before insert) {
+
+    // NOTE: this trigger needs to be bulkified
+
+    Favorite__c favorite = Trigger.New[0];
+    List<Favorite__c> dupes = [Select Id FROM Favorite__C WHERE Property__c = :favorite.Property__c AND User__c = :favorite.User__c];
+    if (!dupes.isEmpty()) {
+        favorite.addError('duplicate');
+    }
+
+}
+
+
+
+AccountAddressTrigger.apxt:-
+
+trigger AccountAddressTrigger on Account (before insert,before update) {
+ for(Account account:Trigger.New)
+ {
+     if(account.Match_Billing_Address__c == true)
+     {
+         account.ShippingPostalCode = account.BillingPostalCode;
+     }
+ }
+}
+
+
+
+HelloWorldTrigger.apxt:-
+
+trigger HelloWorldTrigger on Account (before insert) {
+	System.debug('Hello World!');
+}
+
+
+
+BOTANICALS ::::::::::::::::
+
+OrderItemUtility.apxc:-
+
+  public class OrderItemUtility {
+
+      //Create the method that will add free bonus bouquet when order is activated
+      public static void addBonusBouquet(List<Order> ordersFromTrigger) {
+
+          //TO DO 3.1: Determine if we have a bonus product and get its ID to add to the order
+          // Use SOQL to get the ID of the bonus bouquet and store it in an sObject variable called bonusProduct
+          List<Product2> bonusProductList = [SELECT Id, ProductCode FROM Product2 WHERE ProductCode = 'BOT-BB-12'];
+          Product2 bonusProduct = new Product2();
+          if(bonusProductList.size() > 0) {
+              bonusProduct = bonusProductList[0];
+
+              // Use SOQL to get the price book entry ID associated with the bonusProduct and store it in an sObject variable called entry
+              // Every Product has an assosiated PricebookEntry
+              List<PricebookEntry> entryList = [SELECT Id, Product2Id FROM PricebookEntry WHERE Product2Id = :bonusProduct.Id];
+              PricebookEntry entry = new PricebookEntry();
+              if(entryList.size() > 0) {
+                  entry = entryList[0];
+              }
+
+              //TO DO 2.1: Create a list to store any new bouquets we'll insert later
+              List<OrderItem> newBouquets = new List<OrderItem>();
+
+              //TO DO 2.2: Loop over orders in ordersFromTrigger, for each order (called currentOrder) do something
+              for(Order currentOrder : ordersFromTrigger) {
+
+                  //TO DO 2.3: Verify the order status is 'Activated'
+                  if(currentOrder.Status == 'Activated') {
+
+                      //TO DO 2.4: Create a new bouquet and set values
+                      OrderItem freeBouquet = new OrderItem(
+                          OrderId = currentOrder.id, //this is the order we're linking the bouquet to
+                          PricebookEntryId = entry.id,
+                          numberOfFlowers__c = 3,
+                          description = 'FREE Bouquet',
+                          Quantity = 1,
+                          colorTheme__c = 'Spectacular Sunset',
+                          percentOfOpening__c = 0,
+                          UnitPrice = 0.00
+                      );
+
+                      //TO DO 2.5: Add the freeBouquet sObject to your list
+                      newBouquets.add(freeBouquet);
+
+                  //TO DO 2.6: Close the "if" and "for loop" sections
+                  } //end if
+              } //end for loop
+
+              //TO DO 3.2: Use DML to add the new bouquet to the Order
+              insert newBouquets;
+
+          //TO DO 3.3: Close the if section
+          } 
+      } 
+  } 
+
+
+
+orderTrigger.apxt:-
+
+  trigger orderTrigger on Order(before update) {
+    OrderItemUtility.addBonusBouquet(Trigger.new);
+}
+
+
+
+
+ENCRYPTION CODES::::::::::::::::::
+
+AccountManager.apxc:-
+
+@RestResource(urlMapping='/Accounts/*/contacts')
+global class AccountManager {
+    @HttpGet
+    global static Account getAccount() {
+        RestRequest req = RestContext.request;
+        String accId = req.requestURI.substringBetween('Accounts/', '/contacts');
+        Account acc = [SELECT Id, Name, (SELECT Id, Name FROM Contacts) 
+                       FROM Account WHERE Id = :accId];
+        return acc;
+    }
+}
+
+AccountManagerTest.apxc:- 
+
+@isTest
+private class AccountManagerTest {
+
+    private static testMethod void getAccountTest1() {
+        Id recordId = createTestRecord();
+        // Set up a test request
+        RestRequest request = new RestRequest();
+        request.requestUri = 'https://na1.salesforce.com/services/apexrest/Accounts/'+
+ recordId +'/contacts' ;
+        request.httpMethod = 'GET';
+        RestContext.request = request;
+        // Call the method to test
+        Account thisAccount = AccountManager.getAccount();
+        // Verify results
+        System.assert(thisAccount != null);
+        System.assertEquals('Test record', thisAccount.Name);
+
+    }
+
+    // Helper method
+        static Id createTestRecord() {
+        // Create test record
+        Account TestAcc = new Account(
+          Name='Test record');
+        insert TestAcc;
+        Contact TestCon= new Contact(
+        LastName='Test', 
+        AccountId = TestAcc.id);
+        return TestAcc.Id
+;
+    } 
+}
+
+
+ParkLocatorTest.apxc:-
+
+
+@isTest
+private class ParkLocatorTest {
+    @isTest static void testCallout() {              
+        Test.setMock(WebServiceMock.class, new ParkServiceMock ());
+        String country = 'United States';
+        List<String> result = ParkLocator.country(country);
+        List<String> parks = new List<String>{'Yellowstone', 'Mackinac National Park', 'Yosemite'};
+         System.assertEquals(parks, result); 
+    }
+}
+
+ParkLocator.apxc:-
+
+public class ParkLocator {
+    public static string[] country(string theCountry) {
+        ParkService.ParksImplPort  parkSvc = new  ParkService.ParksImplPort(); // remove space
+        return parkSvc.byCountry(theCountry);
+    }
+}
+
+
+
+ParkService.apxc:-
+
+//Generated by wsdl2apex
+
+public class ParkService {
+    public class byCountryResponse {
+        public String[] return_x;
+        private String[] return_x_type_info = new String[]{'return','http://parks.services/',null,'0','-1','false'};
+        private String[] apex_schema_type_info = new String[]{'http://parks.services/','false','false'};
+        private String[] field_order_type_info = new String[]{'return_x'};
+    }
+    public class byCountry {
+        public String arg0;
+        private String[] arg0_type_info = new String[]{'arg0','http://parks.services/',null,'0','1','false'};
+        private String[] apex_schema_type_info = new String[]{'http://parks.services/','false','false'};
+        private String[] field_order_type_info = new String[]{'arg0'};
+    }
+    public class ParksImplPort {
+        public String endpoint_x = 'https://th-apex-soap-service.herokuapp.com/service/parks';
+        public Map<String,String> inputHttpHeaders_x;
+        public Map<String,String> outputHttpHeaders_x;
+        public String clientCertName_x;
+        public String clientCert_x;
+        public String clientCertPasswd_x;
+        public Integer timeout_x;
+        private String[] ns_map_type_info = new String[]{'http://parks.services/', 'ParkService'};
+        public String[] byCountry(String arg0) {
+            ParkService.byCountry request_x = new ParkService.byCountry();
+            request_x.arg0 = arg0;
+            ParkService.byCountryResponse response_x;
+            Map<String, ParkService.byCountryResponse> response_map_x = new Map<String, ParkService.byCountryResponse>();
+            response_map_x.put('response_x', response_x);
+            WebServiceCallout.invoke(
+              this,
+              request_x,
+              response_map_x,
+              new String[]{endpoint_x,
+              '',
+              'http://parks.services/',
+              'byCountry',
+              'http://parks.services/',
+              'byCountryResponse',
+              'ParkService.byCountryResponse'}
+            );
+            response_x = response_map_x.get('response_x');
+            return response_x.return_x;
+        }
+    }
+}
+
+AsyncParkService.apxc:-  
+
+//Generated by wsdl2apex
+
+
+public class AsyncParkService {
+    public class byCountryResponseFuture extends System.WebServiceCalloutFuture {
+        public String[] getValue() {
+            ParkService.byCountryResponse response = (ParkService.byCountryResponse)System.WebServiceCallout.endInvoke(this);
+            return response.return_x;
+        }
+    }
+    public class AsyncParksImplPort {
+        public String endpoint_x = 'https://th-apex-soap-service.herokuapp.com/service/parks';
+        public Map<String,String> inputHttpHeaders_x;
+        public String clientCertName_x;
+        public Integer timeout_x;
+        private String[] ns_map_type_info = new String[]{'http://parks.services/', 'ParkService'};
+        public AsyncParkService.byCountryResponseFuture beginByCountry(System.Continuation continuation,String arg0) {
+            ParkService.byCountry request_x = new ParkService.byCountry();
+            request_x.arg0 = arg0;
+            return (AsyncParkService.byCountryResponseFuture) System.WebServiceCallout.beginInvoke(
+              this,
+              request_x,
+              AsyncParkService.byCountryResponseFuture.class,
+              continuation,
+              new String[]{endpoint_x,
+              '',
+              'http://parks.services/',
+              'byCountry',
+              'http://parks.services/',
+              'byCountryResponse',
+              'ParkService.byCountryResponse'}
+            );
+        }
+    }
+}
+
+ParkServiceMock.apxc:-
+
+@isTest
+global class ParkServiceMock implements WebServiceMock {
+   global void doInvoke(
+           Object stub,
+           Object request,
+           Map<String, Object> response,
+           String endpoint,
+           String soapAction,
+           String requestName,
+           String responseNS,
+           String responseName,
+           String responseType) {
+        // start - specify the response you want to send
+        ParkService.byCountryResponse response_x = new ParkService.byCountryResponse();
+        response_x.return_x = new List<String>{'Yellowstone', 'Mackinac National Park', 'Yosemite'};
+        // end
+        response.put('response_x', response_x); 
+   }
+}
+
+AnimalLocator.apxc:-
+
+public class AnimalLocator{
+    public static String getAnimalNameById(Integer x){
+        Http http = new Http();
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint('https://th-apex-http-callout.herokuapp.com/animals/'
+ + x);
+        req.setMethod('GET');
+        Map<String, Object> animal= new Map<String, Object>();
+        HttpResponse res = http.send(req);
+            if (res.getStatusCode() == 200) {
+        Map<String, Object> results = (Map<String, Object>)JSON.deserializeUntyped(res.getBody());
+      animal = (Map<String, Object>) results.get('animal');
+        }
+return (String)animal.get('name');
+    }
+}
+
+
+
+AnimalLocatorTest.apxc:-
+
+@isTest
+private class AnimalLocatorTest{
+    @isTest static void AnimalLocatorMock1() {
+        Test.setMock(HttpCalloutMock.class, new AnimalLocatorMock());
+        string result = AnimalLocator.getAnimalNameById(3);
+        String expectedResult = 'chicken';
+        System.assertEquals(result,expectedResult );
+    }
+}
+
+
+
+AnimalLocatorMock.apxc:-
+
+
+@isTest
+global class AnimalLocatorMock implements HttpCalloutMock {
+     // Implement this interface method
+    global HTTPResponse respond(HTTPRequest request) {
+        // Create a fake response
+        HttpResponse response = new HttpResponse();
+        response.setHeader('Content-Type', 'application/json');
+        response.setBody('{"animals": ["majestic badger", "fluffy bunny", "scary bear", "chicken", "mighty moose"]}');
+        response.setStatusCode(200);
+        return response; 
+    }
+}
+
+
+APEX SPECIALIST CODES::::::::::::
+
+
+MaintenanceRequestHelper.apxc :-
+
+public with sharing class MaintenanceRequestHelper {
+    public static void updateworkOrders(List<Case> updWorkOrders, Map<Id,Case> nonUpdCaseMap) {
+        Set<Id> validIds = new Set<Id>();
+
+
+        For (Case c : updWorkOrders){
+            if (nonUpdCaseMap.get(c.Id).Status != 'Closed' && c.Status == 'Closed'){
+                if (c.Type == 'Repair' || c.Type == 'Routine Maintenance'){
+                    validIds.add(c.Id);
+
+
+                }
+            }
+        }
+
+        if (!validIds.isEmpty()){
+            List<Case> newCases = new List<Case>();
+            Map<Id,Case> closedCasesM = new Map<Id,Case>([SELECT Id, Vehicle__c, Equipment__c, Equipment__r.Maintenance_Cycle__c,(SELECT Id,Equipment__c,Quantity__c FROM Equipment_Maintenance_Items__r) 
+                                                         FROM Case WHERE Id IN :validIds]);
+            Map<Id,Decimal> maintenanceCycles = new Map<ID,Decimal>();
+            AggregateResult[] results = [SELECT Maintenance_Request__c, MIN(Equipment__r.Maintenance_Cycle__c)cycle FROM Equipment_Maintenance_Item__c WHERE Maintenance_Request__c IN :ValidIds GROUP BY Maintenance_Request__c];
+
+        for (AggregateResult ar : results){ 
+            maintenanceCycles.put((Id) ar.get('Maintenance_Request__c'), (Decimal) ar.get('cycle'));
+        }
+
+            for(Case cc : closedCasesM.values()){
+                Case nc = new Case (
+                    ParentId = cc.Id,
+                Status = 'New',
+                    Subject = 'Routine Maintenance',
+                    Type = 'Routine Maintenance',
+                    Vehicle__c = cc.Vehicle__c,
+                    Equipment__c =cc.Equipment__c,
+                    Origin = 'Web',
+                    Date_Reported__c = Date.Today()
+
+                );
+
+                If (maintenanceCycles.containskey(cc.Id)){
+                    nc.Date_Due__c = Date.today().addDays((Integer) maintenanceCycles.get(cc.Id));
+                }
+
+                newCases.add(nc);
+            }
+
+           insert newCases;
+
+           List<Equipment_Maintenance_Item__c> clonedWPs = new List<Equipment_Maintenance_Item__c>();
+           for (Case nc : newCases){
+                for (Equipment_Maintenance_Item__c wp : closedCasesM.get(nc.ParentId).Equipment_Maintenance_Items__r){
+                    Equipment_Maintenance_Item__c wpClone = wp.clone();
+                    wpClone.Maintenance_Request__c = nc.Id;
+                    ClonedWPs.add(wpClone);
+
+                }
+            }
+            insert ClonedWPs;
+        }
+    }
+}
+
+
+
+Maintenance_Request.apxt:-
+
+trigger MaintenanceRequest on Case (before update, after update) {
+    if(Trigger.isUpdate && Trigger.isAfter){
+        MaintenanceRequestHelper.updateWorkOrders(Trigger.New, Trigger.OldMap);
+    }
+}
+
+WarehouseCalloutService.apxc :-
+
+public with sharing class WarehouseCalloutService {
+
+    private static final String WAREHOUSE_URL = 'https://th-superbadge-apex.herokuapp.com/equipment';
+
+    //@future(callout=true)
+    public static void runWarehouseEquipmentSync(){
+
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        request.setEndpoint(WAREHOUSE_URL);
+        request.setMethod('GET');
+        HttpResponse response = http.send(request);
+
+
+        List<Product2> warehouseEq = new List<Product2>();
+
+        if (response.getStatusCode() == 200){
+            List<Object> jsonResponse = (List<Object>)JSON.deserializeUntyped(response.getBody());
+            System.debug(response.getBody());
+
+            for (Object eq : jsonResponse){
+                Map<String,Object> mapJson = (Map<String,Object>)eq;
+                Product2 myEq = new Product2();
+                myEq.Replacement_Part__c = (Boolean) mapJson.get('replacement');
+                myEq.Name = (String) mapJson.get('name');
+                myEq.Maintenance_Cycle__c = (Integer) mapJson.get('maintenanceperiod');
+                myEq.Lifespan_Months__c = (Integer) mapJson.get('lifespan');
+                myEq.Cost__c = (Decimal) mapJson.get('lifespan');
+                myEq.Warehouse_SKU__c = (String) mapJson.get('sku');
+                myEq.Current_Inventory__c = (Double) mapJson.get('quantity');
+                warehouseEq.add(myEq);
+            }
+
+            if (warehouseEq.size() > 0){
+                upsert warehouseEq;
+                System.debug('Your equipment was synced with the warehouse one');
+                System.debug(warehouseEq);
+            }
+
+        }
+    }
+}
+
+
+MaintenanceRequestHelperTest.apxc:-
+
+@istest
+public with sharing class MaintenanceRequestHelperTest {
+
+    private static final string STATUS_NEW = 'New';
+    private static final string WORKING = 'Working';
+    private static final string CLOSED = 'Closed';
+    private static final string REPAIR = 'Repair';
+    private static final string REQUEST_ORIGIN = 'Web';
+    private static final string REQUEST_TYPE = 'Routine Maintenance';
+    private static final string REQUEST_SUBJECT = 'Testing subject';
+
+    PRIVATE STATIC Vehicle__c createVehicle(){
+        Vehicle__c Vehicle = new Vehicle__C(name = 'SuperTruck');
+        return Vehicle;
+    }
+
+    PRIVATE STATIC Product2 createEq(){
+        product2 equipment = new product2(name = 'SuperEquipment',
+                                         lifespan_months__C = 10,
+                                         maintenance_cycle__C = 10,
+                                         replacement_part__c = true);
+        return equipment;
+    }
+
+    PRIVATE STATIC Case createMaintenanceRequest(id vehicleId, id equipmentId){
+        case cs = new case(Type=REPAIR,
+                          Status=STATUS_NEW,
+                          Origin=REQUEST_ORIGIN,
+                          Subject=REQUEST_SUBJECT,
+                          Equipment__c=equipmentId,
+                          Vehicle__c=vehicleId);
+        return cs;
+    }
+
+    PRIVATE STATIC Equipment_Maintenance_Item__c createWorkPart(id equipmentId,id requestId){
+        Equipment_Maintenance_Item__c wp = new Equipment_Maintenance_Item__c(Equipment__c = equipmentId,
+                                                                            Maintenance_Request__c = requestId);
+        return wp;
+    }
+
+
+    @istest
+    private static void testMaintenanceRequestPositive(){
+        Vehicle__c vehicle = createVehicle();
+        insert vehicle;
+        id vehicleId = vehicle.Id;
+
+        Product2 equipment = createEq();
+        insert equipment;
+        id equipmentId = equipment.Id;
+
+        case somethingToUpdate = createMaintenanceRequest(vehicleId,equipmentId);
+        insert somethingToUpdate;
+
+        Equipment_Maintenance_Item__c workP = createWorkPart(equipmentId,somethingToUpdate.id);
+        insert workP;
+
+        test.startTest();
+        somethingToUpdate.status = CLOSED;
+        update somethingToUpdate;
+        test.stopTest();
+
+        Case newReq = [Select id, subject, type, Equipment__c, Date_Reported__c, Vehicle__c, Date_Due__c
+                      from case
+                      where status =:STATUS_NEW];
+
+        Equipment_Maintenance_Item__c workPart = [select id
+                                                 from Equipment_Maintenance_Item__c
+                                                 where Maintenance_Request__c =:newReq.Id];
+
+        system.assert(workPart != null);
+        system.assert(newReq.Subject != null);
+        system.assertEquals(newReq.Type, REQUEST_TYPE);
+        SYSTEM.assertEquals(newReq.Equipment__c, equipmentId);
+        SYSTEM.assertEquals(newReq.Vehicle__c, vehicleId);
+        SYSTEM.assertEquals(newReq.Date_Reported__c, system.today());
+    }
+
+    @istest
+    private static void testMaintenanceRequestNegative(){
+        Vehicle__C vehicle = createVehicle();
+        insert vehicle;
+        id vehicleId = vehicle.Id;
+
+        product2 equipment = createEq();
+        insert equipment;
+        id equipmentId = equipment.Id;
+
+        case emptyReq = createMaintenanceRequest(vehicleId,equipmentId);
+        insert emptyReq;
+
+        Equipment_Maintenance_Item__c workP = createWorkPart(equipmentId, emptyReq.Id);
+        insert workP;
+
+        test.startTest();
+        emptyReq.Status = WORKING;
+        update emptyReq;
+        test.stopTest();
+
+        list<case> allRequest = [select id 
+                                 from case];
+
+        Equipment_Maintenance_Item__c workPart = [select id 
+                                                  from Equipment_Maintenance_Item__c 
+                                                  where Maintenance_Request__c = :emptyReq.Id];
+
+        system.assert(workPart != null);
+        system.assert(allRequest.size() == 1);
+    }
+
+    @istest
+    private static void testMaintenanceRequestBulk(){
+        list<Vehicle__C> vehicleList = new list<Vehicle__C>();
+        list<Product2> equipmentList = new list<Product2>();
+        list<Equipment_Maintenance_Item__c> workPartList = new list<Equipment_Maintenance_Item__c>();
+        list<case> requestList = new list<case>();
+        list<id> oldRequestIds = new list<id>();
+
+        for(integer i = 0; i < 300; i++){
+           vehicleList.add(createVehicle());
+            equipmentList.add(createEq());
+        }
+        insert vehicleList;
+        insert equipmentList;
+
+        for(integer i = 0; i < 300; i++){
+            requestList.add(createMaintenanceRequest(vehicleList.get(i).id, equipmentList.get(i).id));
+        }
+        insert requestList;
+
+        for(integer i = 0; i < 300; i++){
+            workPartList.add(createWorkPart(equipmentList.get(i).id, requestList.get(i).id));
+        }
+        insert workPartList;
+
+        test.startTest();
+        for(case req : requestList){
+            req.Status = CLOSED;
+            oldRequestIds.add(req.Id);
+        }
+        update requestList;
+        test.stopTest();
+
+        list<case> allRequests = [select id
+                                 from case
+                                 where status =: STATUS_NEW];
+
+        list<Equipment_Maintenance_Item__c> workParts = [select id
+                                                        from Equipment_Maintenance_Item__c
+                                                        where Maintenance_Request__c in: oldRequestIds];
+
+        system.assert(allRequests.size() == 300);
+    }
+}
+
+
+
+WarehouseCalloutServiceTest.apxc :-
+
+@isTest
+
+private class WarehouseCalloutServiceTest {   
+    @isTest  
+    static void testWareHouseCallout(){
+        Test.startTest();
+        // implement mock callout test here
+        Test.setMock(HTTPCalloutMock.class, new WarehouseCalloutServiceMock());
+        WarehouseCalloutService.runWarehouseEquipmentSync();
+        Test.stopTest();
+        System.assertEquals(1, [SELECT count() FROM Product2]);
+    }     
+}
+
+WarehouseCalloutServiceMock.apxc :-
+
+@isTest
+global class WarehouseCalloutServiceMock implements HttpCalloutMock {
+    // implement http mock callout
+    global static HttpResponse respond(HttpRequest request){
+
+        System.assertEquals('https://th-superbadge-apex.herokuapp.com/equipment', request.getEndpoint());
+        System.assertEquals('GET', request.getMethod());
+
+        // Create a fake response
+        HttpResponse response = new HttpResponse();
+        response.setHeader('Content-Type', 'application/json');
+        response.setBody('[{"_id":"55d66226726b611100aaf741","replacement":false,"quantity":5,"name":"Generator 1000 kW","maintenanceperiod":365,"lifespan":120,"cost":5000,"sku":"100003"}]');
+        response.setStatusCode(200);
+        return response;
+    }
+}
+WarehouseSyncSchedule :-
+
+global class WarehouseSyncSchedule implements Schedulable {
+    global void execute(SchedulableContext ctx) {
+
+        WarehouseCalloutService.runWarehouseEquipmentSync();
+    }
+}
+
+
+
+WarehouseSyncScheduleTest.apxc :-
+
+
+@isTest
+public class WarehouseSyncScheduleTest {
+
+    @isTest static void WarehousescheduleTest(){
+        String scheduleTime = '00 00 01 * * ?';
+        Test.startTest();
+        Test.setMock(HttpCalloutMock.class, new WarehouseCalloutServiceMock());
+        String jobID=System.schedule('Warehouse Time To Schedule to Test', scheduleTime, new WarehouseSyncSchedule());
+        Test.stopTest();
+        //Contains schedule information for a scheduled job. CronTrigger is similar to a cron job on UNIX systems.
+        // This object is available in API version 17.0 and later.
+        CronTrigger a=[SELECT Id FROM CronTrigger where NextFireTime > today];
+        System.assertEquals(jobID, a.Id,'Schedule ');
+
+
+    }
+}
